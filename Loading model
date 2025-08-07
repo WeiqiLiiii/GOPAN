@@ -1,0 +1,9 @@
+checkpoint = torch.load('/Users/weiqili/desktop/python working directory/checkpointGOPAN.pt',weights_only=False,map_location=device)
+
+torch.set_rng_state(checkpoint['rng_state'])
+torch.cuda.set_rng_state_all(checkpoint['cuda_rng_state'])
+np.random.set_state(checkpoint['numpy_rng_state'])
+random.setstate(checkpoint['python_rng'])
+
+model.load_state_dict(torch.load("/Users/weiqili/desktop/python working directory/GOPAN.pt"))
+model.eval()
