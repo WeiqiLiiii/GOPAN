@@ -1,0 +1,361 @@
+import pandas as pd
+import obonet
+import networkx as nx
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch_geometric.data import Data
+from torch_geometric.nn import GCNConv
+from tqdm import tqdm
+from io import StringIO
+import gseapy as gp
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, average_precision_score
+)
+from collections import defaultdict
+from UniProtMapper import ProtMapper
+import random
+from pyvis.network import Network
+
+gene_text = """
+ADNP2, GABRA1, KPNA1, PLG, RAI1, ZNF480, ACE, SLC12A2, DLG4, SDHA, NPTN, MBP, GABARAP, DLGAP1, NRXN1, TPH2, SLC6A9, KCNJ3, PMP2, LCN2, SYT11, NLGN1, GCH1, MSS51, SRD5A2, GRN, TAAR1, MTR, CHRNA3, FGFR2, CHRNA5, OXT, ENO2, GABRQ, HTR2A, LTA, EMX2, PTPRZ1, APOL4, MLC1, CALB1, SLC6A11, PCNT, XBP1, PIK3CB, GFRA3, SPATA5, BTG1, CASP4, PICK1, LRRTM1, COL3A1, BTC, MSRA, BECN1, CBS, CLDN5, TLR2, SP4, PCK1, PEMT, TAC1, TPH1, SHANK1, YWHAE, NDP, NCS1, ACSL6, GSTT1, SLC6A12, KLF12, CNPPD1, SH3PXD2A, CRH, NPY1R, MC5R, PIP4K2C, CLU, IFNL3, DRD3, ALDH3A1, TBP, SRGAP3, NTSR1, CELF2, GAP43, SLC6A1, GDNF, ACTR2, TXNDC5, ADK, SP1, HHAT, NR3C1, COMT, AMACR, FGFR1, ALS2CL, CP, APOD, CMYA5, BDNF, LIFR, EN2, RAPGEF6, APOL2, SIRT1, RTN4R, TSNARE1, SST, LMX1A, GCLC, ERVW-1, SYN3, ZNF804A, GNAS, JARID2, SLC17A7, MMP9, NPAS1, ERBB4, CCNA2, BLOC1S3, GRIN2D, B3GAT2, HLA-B, IL19, XRCC4, ME2, IGF2BP2, GRM2, H1-4, CHGB, MMP3, BRAP, ADSS2, PGBD1, EIF2S1, GAD2, DPYD, ACHE, GRM1, HOMER1, PDIK1L, XRCC1, NRXN3, CD163, HTR1A, HCRTR1, PTPN1, SDCCAG8, IPO5, CHRM5, HPS4, GNB3, GLUL, GRIN2C, APOE, ADRA1A, JAG2, CCDC86, AHI1, H2AX, NPSR1, KCNQ2, ALDH1A2, NUMBL, DLG3, CDC25C, PLA2G1B, MTNR1A, SLC1A1, GPR50, PLA2G4C, BHLHE40, NRIP1, CPLX1, PLXNA2, NDUFV2, MAPK1, ATXN2, TRAK1, HPGDS, PBRM1, CDK5, RANBP9, APBA2, APOA4, SPTBN2, LASP1, SRSF10, LEP, VIPR2, CHI3L1, CAV1, HTR3D, MCTP2, GJA8, NLGN2, FAS, JAG1, PLSCR4, IL2, NDE1, DIXDC1, NTF3, HSPA12A, ADAMTS3, KMT2A, ITGB3, LYRM4, RTKN2, FZD3, CNR2, AGER, TGM2, ANK3, GABRB2, FMR1, IL3, R3HDML, VPS35, TSPAN8, EGR4, GPS1, GRB2, NTS, CYFIP1, CYP3A4, CYP2E1, HRH1, NRN1, NRG1, ALDH3B1, KLF5, PLAT, UHMK1, CSF2RA, REST, SYNGR1, SYN2, BRCA1, RBP1, ANKK1, ITIH3, ADORA2A, KCNS3, CRP, ARHGAP32, CCL2, ARHGAP18, HSPA1L, CKB, ARHGEF11, PTGS1, CDC42SE2, CHRM2, PINK1, FXYD1, SIGMAR1, BCL9, MED15, PDLIM5, MSRB1, CACNB2, NPAS2, MPZL1, ESS2, LRP1, SYP, ASTN2, LARS2, DLG1, CTNND2, HLA-C, GNPAT, DNMT3B, OLIG2, CSF2RB, ABCA1, HTR2C, DOCK4, THBS1, CTXN3, BACE1, CYP1A2, SEPTIN11, CNR1, GRID1, MEGF10, CTNNA2, PAWR, CDC42EP3, MOG, RB1CC1, CBLIF, UCP2, GNAO1, PPP3R1, PLP1, SETDB1, SETD1A, CCR5, ADAMTSL3, HLA-E, IL6R, AUTS2, PDE4D, PDE4A, PRDX6, TP53, KIF2A, RTN4, SDF4, PSD3, GSTT2, RHD, HDAC1, PON1, LAMA1, HAGH, GRIK2, INPP5A, GABRA5, PLCB1, PLA2G4A, ABCB1, TPT1, GRB10, GABBR1, IL4, MDK, DGCR8, ERBB3, IMPA2, SMARCA2, ACP1, MAOA, CNTF, NTRK2, TRRAP, MTHFD1, PTPN21, BLOC1S1, CACNA1B, TNIK, NRXN2, HLA-A, ARVCF, CHGA, SLC38A2, CACNA1C, ADGRF4, MAPK14, PNPO, CRMP1, CHRNA7, CSMD1, NPAS3, CACNA1F, NDUFS1, WDR11, GABRG2, CTSK, FSTL1, NTRK1, PAFAH1B1, OPRM1, STXBP1, PPARA, S100B, FOXP2, MYT1L, SLIT3, SLC30A3, CLOCK, MET, MAP2K7, FBXL21P, ACSM1, SBNO1, ATM, MAPK8, IL2RG, CDK5R1, NFASC, RETREG2, HTR3E, ITGAM, NPY, ADAM12, GSTM1, FYN, DCLK1, KDR, CHAT, DKK3, DICER1, PPP3CC, DBN1, AKT1, KCNH2, SNX31, PSAT1, GRM5, LRP2, ST6GALNAC1, GRIA3, APC, CSNK1E, SLC23A3, CHRM1, TLR4, GRK6, LPAR1, APOH, NR4A2, GNAL, F2, CACNG2, GPM6A, TAP1, SIRPB1, SELENBP1, LILRB1, CNP, LMX1B, SMAD5, DLX1, DNM1, RELN, SOX5, ARC, NTRK3, IL10RA, DKK4, ADORA1, GABRA4, ASAH1, CTLA4, SNCB, DGCR2, MAOB, ICAM1, GRIA1, MICB, SHMT1, GABRD, SLC6A5, IL10, EN1, CFAP65, SAP30BP, ELAVL2, HSPA1B, RIMS2, DRD4, TCF4, SLC18A2, ALOX12, GSTM2, PTPN5, IL6, NEUROG1, ADCYAP1R1, PAH, GABRB1, BAG1, NR2E1, DISC1, NKAPL, VSNL1, PLA2G6, VPS39, NRGN, SRR, ADNP, ITIH1, HDAC4, CPLX2, HLA-DQB1, TET1, LMAN2L, HDAC3, IL1B, CDC42, PRODH, PRSS16, CHL1, FGF2, OPA1, A1BG, TBX1, CCDC68, TOP3B, NTNG2, B3GNT2, HSPA1A, HLA-DRB4, PVALB, NDEL1, PCM1, HSPA9, CHD4, PDGFRB, KIF17, RIMS3, TMEM245, NRG3, RASD2, LSAMP, HTR4, FAM3D, GC, PSD, SLC25A27, AVP, PIP4K2A, BCL2, PI4K2B, EFCAB11, FASTKD5, MAD1L1, IL18, PPIA, PSEN2, FABP5, PLCL2, SEPTIN7, ESR1, PTPN6, PHB, ST3GAL1, FEZ1, TPI1, PLA2G4B, CCND2, ACTB, GRIK5, GSN, CACNG5, BTBD9, CLVS2, ZNF565, DPYSL2, FBP1, SHANK3, HK1, PLEKHA6, DCC, SOD2, PDE4B, GRM3, HTR3A, RGS2, HNRNPA3, ACOT6, PI4KA, SOX10, DTNBP1, PTGER3, FABP7, PAK2, ZSCAN31, HMGA1, BRD1, C9orf72, CNIH3, LRP8, EPHX2, TAPBP, LPL, CTNNB1, ADARB1, MYO5B, TCF7L2, RGS12, TAP2, SRSF1, TGFB1, RARA, SLC6A2, SNAP29, GRIA2, CALY, CYP3A5, MAGI2, ESR2, DDO, HOMER2, NDUFV1, IL18R1, STH, RGS9, TMSB10, GABRB3, ADCY7, GFRA1, GRIK3, NOS1, GNB1L, MCAT, AGA, TYR, GAD1, CALR, NEFL, CETN1, GSTA1, KDM2B, ZNF74, TF, ALDH1A1, ADAMTS12, CHEK1, TEKT5, NAV1, NOS1AP, CHRM4, UGT1A3, GRIN2B, DRD1, HTR6, FXYD6, DNMT3L, PDE7B, UNC5C, DRD2, YWHAZ, ATF4, NGFR, B3GAT1, EML5, SLC18A1, NCAM1, SYNGAP1, DGCR6, ULK4, IL12B, CDK16, KPNA3, DAZAP1, HLA-DRB1, ZIC2, SLC7A10, SLC1A2, PLAA, EFNB2, CDKN1C, ATP2A2, ZNF530, MED12, PLLP, SREBF2, CGNL1, PDYN, TNFSF13, GSK3A, AVPR1A, SLC26A8, CAMK2B, STON2, TNFRSF1B, CNTNAP2, MTHFR, CCKAR, OXTR, CCDC137, ZKSCAN4, VIP, SERPINI1, BCL11A, OFCC1, PPARGC1A, IDE, NNMT, NPAS4, NCAN, KMO, GRIA4, AKR1A1, PTPRA, CAMKK2, FUT8, TENM4, SLC1A3, FBXO45, CSPG5, IL1RAPL1, ITGA8, OXSR1, NPRL2, TSPAN18, DDR1, CCND1, FOLH1, RELA, GRIK1, VRK2, SYN1, HDAC2, HTR3B, CCK, MYO9B, PPP1R1B, DCDC2, PAG1, TNFRSF1A, DAO, TRMT2A, CNNM2, SV2A, CHRNA4, C1QB, SOCS2, HTR5A, PTGS2, CSMD2, ETNPPL, AMBRA1, BID, DNMT1, TNF, GRIN2A, STX1A, ABCA13, CASP3, MYO16, GRM8, EGR2, SREBF1, KAT8, PIK3C3, IGF2, FADS2, PIK3CA, TDO2, HMOX1, ARHGAP1, SBNO2, PRL, DYM, TRPM1, PPP1R9B, MBNL1, RCBTB1, CHRFAM7A, PANK2, SLC1A6, GABRA6, MAPK3, NTNG1, ALK, ADM, PRKCA, DLG2, NUFIP2, IL2RA, H1-5, SULT4A1, HINT1, CADPS2, KREMEN1, OPCML, ADCYAP1, RGS5, GLO1, MBD2, CTRL, SEMA3D, PITPNM1, CTCF, KCNB1, MTOR, MARK2, ADRA2A, PKNOX2, NOTCH4, SLC6A3, NQO2, UFD1, HDAC9, SLC6A4, PML, IFNG, ESAM, WNK3, PCDH8, KCTD12, AQP4, HTR7, PDZK1, CSF2, GSK3B, SLC12A5, VLDLR, EGR3, PCDH17, DAAM2, GSTP1, EIF5, MAGI1, MDH1, PAX6, CHRNB2, ZDHHC8, MAG, QKI, JUN, KCNN3, LAMA2, GABRR1, LHX6, IL3RA, GFAP, EDEM2, TNXB, S100A9, CREB1, HP, TACR3, TLR3, DLGAP2, TREM1, CEACAM21
+"""
+
+# to list
+listver = [g.strip() for g in gene_text.replace("\n", "").split(",") if g.strip()]
+
+# to dataframe
+df = pd.DataFrame(listver, columns=["gene"])
+df["disease_id"] = "Schizophrenia"
+
+pos_genes = set(df['gene'].dropna().unique()) #data cleaning
+
+
+#This section is importing whole genome file from my library
+df2 = pd.read_csv("/Users/weiqili/desktop/python working directory/hgnc_complete_set.txt",  sep='\t', dtype=str)
+
+protein_coding = df2[df2['locus_group'] == 'protein-coding gene']#data cleaning
+
+all_genes = set(protein_coding['symbol'].dropna())#data cleaning
+
+#This section is for makeing the number of samples taken from the whole genome is equal to the number of risk genes.
+schizophrenia_genes = set(df['gene'])
+
+neg_genes = list(all_genes - schizophrenia_genes)
+
+genes = list(pos_genes | set(list(neg_genes)[:len(pos_genes)]))#merge to create a data set with: risk gene + random control gene
+
+
+#import go number data from library
+
+go_df = pd.read_csv("/Users/weiqili/desktop/python working directory/C Gene Ontology v2021-02.csv")
+go_graph = obonet.read_obo('/Users/weiqili/PycharmProjects/pythonProject/go-basic.obo')
+go_df = go_df.dropna(subset=['gene', 'GOterm'])
+
+gene2go_dict = defaultdict(set)
+for _, row in go_df.iterrows():
+    gene2go_dict[row["gene"]].add(row["GOterm"])
+
+all_go_terms = set(go_df['GOterm'])
+go2idx = {go: idx for idx, go in enumerate(sorted(all_go_terms))}
+n_terms = len(go2idx)
+
+def get_ancestors(go_id):
+    if go_id not in go_graph:
+        return set()
+    return nx.ancestors(go_graph, go_id) | {go_id}
+
+
+#import Protein-Protein Interaction data from InAct
+ppi_df = pd.read_csv("/Users/weiqili/desktop/python working directory/C IntAct v2021-04.csv", usecols=["interactor B"]) #Read IntAct file.
+unique_proteins = sorted(ppi_df["interactor B"].dropna().unique()) #Delete missing values and extract unique values
+#
+# #=====a====== ##This session is use ProtMapper to map UniProt IDs to human gene names.
+#
+# mapping_df = pd.read_csv("uniprot_to_gene_mapping.csv") #Load file containing protein IDs
+# protein_ids = mapping_df["uniprot_id"].tolist()#Extract all UniProt IDs
+# mapper = ProtMapper() #Use ProtMapper for ID mapping;
+# result_df, failed = mapper.get(
+#     ids=protein_ids,
+#     from_db="UniProtKB_AC-ID",
+#     to_db="Gene_Name"
+# )
+# #Display how many IDs were mapped successfully and unsuccessfully.
+# print(f" sucess: {len(result_df)}")
+# print(f" fail: {len(failed)} ")
+# #merged
+# merged = mapping_df.merge(
+#     result_df[["From", "To"]],
+#     left_on="uniprot_id",
+#     right_on="From",
+#     how="left"
+# ).rename(columns={"To": "gene_symbol"})
+#
+# merged = merged.rename(columns={"Gene_Name": "gene_symbol"})#Avoid field conflicts
+# merged.to_csv("/Users/weiqili/desktop/python working directory/uniprot_to_gene_mapping_filled.csv", index=False)#Save
+# #========a======
+
+
+#read ==a==
+mapping_df = pd.read_csv("/Users/weiqili/desktop/python working directory/uniprot_to_gene_mapping_filled.csv")#Read the pre-processed mapping file, which contains gene names from the ProtMapper result
+mapping_df["gene"] = mapping_df["gene_symbol"].fillna(mapping_df["gene_symbol.1"])#Prioritise gene_symbol
+mapping_df["gene"] = mapping_df["gene"].fillna(mapping_df["From"])#if missing, use gene_symbol.1 or From to complete
+mapping_df = mapping_df.dropna(subset=["gene"])#discard rows where the gene name cannot be found.
+
+uniprot2gene = dict(zip(mapping_df["uniprot_id"], mapping_df["gene"]))#Create a mapping dictionary from UniProt to gene
+
+#Since only the protein column was read when performing the automatic search, the gene column is now completed, i.e., interacting gene A
+ppi_df = pd.read_csv("/Users/weiqili/desktop/python working directory/C IntAct v2021-04.csv", usecols=["interactor A", "interactor B"])
+
+ppi_df["gene_A"] = ppi_df["interactor A"]
+ppi_df["gene_B"] = ppi_df["interactor B"].map(uniprot2gene)#This is the interacting gene B found through protein search.
+ppi_df = ppi_df.dropna(subset=["gene_B"]) #Discard rows without gene_B (i.e., those that cannot be matched)
+
+#Construct a clean PPI edge set
+ppi_edges = ppi_df[["gene_A", "gene_B"]].dropna().values.tolist()
+#Filtering standard： Both points must be in your candidate genes list (e.g., GO-annotated) and cannot be self-connected
+ppi_edges_clean = [(a, b) for (a, b) in ppi_edges if a in genes and b in genes and a != b]
+
+#Extract all genes appearing in the cleaned PPI edges (deduplicated + sorted) and assign an index to each gene.
+gene_list = sorted(set(g for edge in ppi_edges_clean for g in edge))
+gene_idx = {g: i for i, g in enumerate(gene_list)}
+
+#Convert the edge list to edge_index format for use in graph neural networks.
+edge_index = torch.tensor(
+    [[gene_idx[a], gene_idx[b]] for a, b in ppi_edges_clean] +
+    [[gene_idx[b], gene_idx[a]] for a, b in ppi_edges_clean],
+    dtype=torch.long
+).t().contiguous()
+
+#Construct a NetworkX undirected graph based on the original PPI data.
+ppi_graph = nx.Graph()
+ppi_graph.add_edges_from(ppi_edges)
+
+# 5 topological indicators
+betweenness = nx.betweenness_centrality(ppi_graph, k=100, seed=42) #The intermediary role of each gene in the shortest path (sampling k=100,seed= 42)
+gene_degrees = dict(ppi_graph.degree()) #The number of connections for each gene
+closeness = nx.closeness_centrality(ppi_graph) #The reciprocal of the average shortest path from each gene to all other nodes.
+pagerank = nx.pagerank(ppi_graph) #The ‘global influence’ score for each gene
+eigenvector = nx.eigenvector_centrality(ppi_graph, max_iter=1000) #The degree to which genes connect to important nodes (global feature centrality)
+
+#Extract the above five indicators as feature vectors for each gene to form a [num_genes, 5] structural feature tensor
+ppi_features = torch.tensor([
+    [
+        gene_degrees.get(g, 0),
+        betweenness.get(g, 0.0),
+        closeness.get(g, 0.0),
+        eigenvector.get(g, 0.0),
+        pagerank.get(g, 0.0)
+    ]
+    for g in gene_list
+], dtype=torch.float32)
+
+all_required_genes = set(genes) | set(gene_list) #Construct a complete set containing the genes in the training labels and the gene_list in the interaction map
+go_terms = [n for n in go_graph.nodes if n.startswith('GO:')] #extract go features based on data starting with ‘go’.
+go2idx = {go: i for i, go in enumerate(go_terms)} #allocation index
+n_terms = len(go_terms)
+
+gene2vec = {} #empty set
+for gene in all_required_genes:
+    go_terms = gene2go_dict.get(gene, set())
+    vec = np.zeros(n_terms, dtype=np.float32) #Create a zero vector of length n_terms for each gene
+    for go in go_terms: #Add GO term and its ancestor nodes (weighted annotation propagation)
+        for ancestor in get_ancestors(go):
+            if ancestor in go2idx:
+                try:
+                    dist = nx.shortest_path_length(go_graph, ancestor, go)
+                    vec[go2idx[ancestor]] = 1.0 / (1 + dist) #The greater the distance, the lower the weight, and the higher the score for synonymous annotations
+                except nx.NetworkXNoPath:
+                    continue
+    gene2vec[gene] = vec
+
+
+go_tensor = torch.tensor([gene2vec[g] for g in gene_list], dtype=torch.float32) #Convert the constructed GO vector to a PyTorch tensor, ensuring that the order matches that of gene_list.
+
+X_base = torch.cat([go_tensor, ppi_features], dim=1) #Splicing GO functional characteristics + PPI structural characteristics as training data set
+
+
+# label each gene:
+# if it is a positive sample (schizophrenia-related gene) = 1
+# otherwise (negative sample) = 0
+y_full = torch.tensor([1 if g in pos_genes else 0 for g in gene_list], dtype=torch.float32).unsqueeze(1)
+
+# data prepare
+data = Data(x=X_base, edge_index=edge_index)
+
+#GCN + transformer
+
+class GOPAN(nn.Module):
+    def __init__(self, in_dim, gcn_hidden=128, trans_dim=128, n_heads=4, n_layers=2):
+        super().__init__()
+        self.gcn1 = GCNConv(in_dim, gcn_hidden)
+        self.gcn2 = GCNConv(gcn_hidden, gcn_hidden)
+        self.proj = nn.Linear(gcn_hidden, trans_dim) #convert the output of GCN into a format that can be input into attention
+        encoder_layer = nn.TransformerEncoderLayer(d_model=trans_dim, nhead=n_heads)
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
+        self.fc = nn.Linear(trans_dim, 1)
+#forward
+    def forward(self, data):
+        x, edge_index = data.x, data.edge_index
+        x = F.relu(self.gcn1(x, edge_index))
+        x = F.relu(self.gcn2(x, edge_index))
+        x = self.proj(x)
+        x = x.unsqueeze(1)
+        x = self.encoder(x)
+        x = x.squeeze(1)
+        return torch.sigmoid(self.fc(x))
+
+
+#setting
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu") #can be ignored, i used it for training setting
+model = GOPAN(in_dim=X_base.shape[1]).to(device)
+data = data.to(device)
+y_full = y_full.to(device)
+optimizer = torch.optim.Adam(model.parameters(), lr=2e-4) #1e-4
+loss_fn = nn.BCELoss()
+
+#training
+model.train()
+for epoch in range(40):
+    optimizer.zero_grad()
+    pred = model(data)
+    loss = loss_fn(pred, y_full)
+    loss.backward()
+    optimizer.step()
+    print(f"Epoch {epoch+1}/40 – Loss: {loss.item():.4f}")
+
+# model evaluation
+
+model.eval() #Put the model in evaluation mode, turn off Dropout and BatchNorm.
+with torch.no_grad():
+    pred_probs = model(data).cpu().numpy().squeeze()#The probability that the model predicts each gene to be a ‘risk gene’
+    pred_labels = (pred_probs >= 0.5).astype(int)  #Classify samples with a predicted probability ≥ 0.5 as positive examples (i.e., binary classification labels).
+    true_labels = y_full.cpu().numpy().squeeze()
+
+# define the evaluation function
+acc = accuracy_score(true_labels, pred_labels)
+precision = precision_score(true_labels, pred_labels, zero_division=0)
+recall = recall_score(true_labels, pred_labels)
+f1 = f1_score(true_labels, pred_labels)
+roc_auc = roc_auc_score(true_labels, pred_probs)
+pr_auc = average_precision_score(true_labels, pred_probs)
+
+# print the output
+print("\n Model Evaluation")
+print(f"Accuracy      : {acc:.4f}")
+print(f"Precision     : {precision:.4f}")
+print(f"Recall        : {recall:.4f}")
+print(f"F1 Score      : {f1:.4f}")
+print(f"ROC AUC       : {roc_auc:.4f}")
+print(f"PR AUC        : {pr_auc:.4f}")
+
+
+
+#validation & result
+
+model.eval()
+with torch.no_grad():
+    probs = model(data).cpu().numpy().squeeze()
+
+# top risk
+k = 100 #change k number here if you want different amounts
+topk_idx = np.argsort(-probs)[:k]
+print(f"\nTop {k} overall predictions:") #take the first k largest prediction probabilities
+for i in topk_idx:
+    print(f"{gene_list[i]}: {probs[i]:.4f}") #output the names and probability values of these k genes
+
+
+print(f" TOTAL number：{len(probs)} ")
+min_score = np.min(pred_probs)
+print(f"minimum: {min_score:.4f}")
+
+#///////////
+#prediction making
+def get_gene_vec(g):
+    if g in gene2vec:
+        return gene2vec[g]
+    vec = np.zeros(n_terms, dtype=np.float32)
+    for go in gene2go_dict.get(g, []):
+        for ancestor in get_ancestors(go):
+            if ancestor in go2idx:
+                vec[go2idx[ancestor]] = 1.0 /(1 + nx.shortest_path_length(go_graph, ancestor, go))
+    gene2vec[g] = vec
+    return vec
+
+all_unlabeled_genes = list(all_genes - pos_genes - set(neg_genes[:len(pos_genes)])) #unlabeled gene in the ppi & go number. Remove positive and negative samples used in the training set from the entire set to obtain candidate new genes.
+#feature construction
+unlabeled_go = np.stack([get_gene_vec(g) for g in all_unlabeled_genes])
+unlabeled_deg = np.array([gene_degrees.get(g, 0) for g in all_unlabeled_genes]).reshape(-1, 1)
+unlabeled_betweenness = np.array([betweenness.get(g, 0.0) for g in all_unlabeled_genes]).reshape(-1, 1)
+unlabeled_closeness = np.array([closeness.get(g, 0.0) for g in all_unlabeled_genes]).reshape(-1, 1)
+unlabeled_pagerank = np.array([pagerank.get(g, 0.0) for g in all_unlabeled_genes]).reshape(-1, 1)
+unlabeled_eigenvector = np.array([eigenvector.get(g, 0.0) for g in all_unlabeled_genes]).reshape(-1, 1)
+
+unlabeled_ppi_features = np.concatenate(
+    [unlabeled_deg, unlabeled_betweenness, unlabeled_closeness, unlabeled_eigenvector, unlabeled_pagerank], axis=1
+)
+
+unlabeled_x = torch.tensor(
+    np.concatenate([unlabeled_go, unlabeled_ppi_features], axis=1), dtype=torch.float32
+).to(device)
+
+model.eval()
+with torch.no_grad():
+    pseudo_data = Data(x=unlabeled_x, edge_index=torch.empty((2,0), dtype=torch.long).to(device))  # dummy edge
+    pseudo_probs = model(pseudo_data).cpu().numpy().squeeze()
+#Sort and take the top topk unlabelled genes with the highest scores;
+#print the corresponding genes and their predicted probabilities.
+topk = 100#change k number here if you want different amounts
+top_idx = np.argsort(-pseudo_probs)[:topk]
+print(f"\nTop {topk} new candidate risk genes:")
+for i in top_idx:
+    print(f"{all_unlabeled_genes[i]}: {pseudo_probs[i]:.4f}")
+
+
+
+#visual
+
+top_k = 20
+topk_indices = np.argsort(-pred_probs)[:top_k] #Sort by model prediction probability (pred_probs) from high to low;
+top_pred_genes = set([all_unlabeled_genes[i] for i in topk_indices]) #Take the top 20 unannotated genes as high-confidence candidates.
+
+neighbors = set()
+for gene in top_pred_genes:
+    if gene in ppi_graph:
+        neighbors.update(ppi_graph.neighbors(gene)) #Iterate through each predicted gene and extract its directly connected neighbours
+
+sub_nodes = top_pred_genes | neighbors #Using predictive genes + neighbours to form subgraphs
+subgraph = ppi_graph.subgraph(n for n in sub_nodes if n in ppi_graph)
+
+net = Network(notebook=True,
+              height='700px',
+              width='100%',
+              bgcolor='#ffffff',
+              font_color='black',
+              cdn_resources='in_line') #Create pyvis graph objects（the drawing tool)
+
+for node in subgraph.nodes():
+    go_info = gene2go_dict.get(node, "No GO annotation")
+    if isinstance(go_info, set):
+        go_info = "; ".join(sorted(go_info))
+
+    if node in pos_genes: #Known positive examples (schizophrenia genes in DisGeNET)
+        color = 'red'
+        size = 30
+    elif node in top_pred_genes: #Model Top 20 high-scoring new predicted genes
+        color = 'purple'
+        size = 20
+    else:
+        color = 'lightblue' #Their first-order neighbours (not predicted by the model, non-examples)
+        size = 8
+
+    net.add_node(node, label=node, title=go_info, color=color, size=size)
+
+
+for edge in subgraph.edges():
+    net.add_edge(edge[0], edge[1]) #Add all connections in the subgraph;
+
+
+net.show("/Users/weiqili/desktop/python working directory/ppigraph_top20_neighbors_GO2.html")
